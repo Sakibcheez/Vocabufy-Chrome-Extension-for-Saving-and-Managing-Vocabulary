@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vocabufy</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">V</div>
+      <div class="brand-copy">
+        <h1>Vocabufy</h1>
+        <p><span id="wordCount">0</span> words in your library</p>
+      </div>
+      <button id="openManager" class="icon-button" type="button" title="Open full vocabulary" aria-label="Open full vocabulary">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
+      </button>
+    </header>
+
+    <section class="quick-add" aria-labelledby="quickAddTitle">
+      <label id="quickAddTitle" for="quickTerm">Quick add</label>
+      <div class="input-row">
+        <input id="quickTerm" type="text" maxlength="120" autocomplete="off" placeholder="Type a word or phrase…">
+        <button id="quickAddButton" type="button">Add</button>
+      </div>
+    </section>
+
+    <section class="library-preview" aria-labelledby="recentTitle">
+      <div class="section-heading">
+        <h2 id="recentTitle">Your vocabulary</h2>
+        <span id="resultCount" class="result-count"></span>
+      </div>
+      <label class="search-box" for="searchInput">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="searchInput" type="search" autocomplete="off" placeholder="Search saved words">
+      </label>
+      <div id="wordList" class="word-list" aria-live="polite"></div>
+      <div id="emptyState" class="empty-state" hidden>
+        <div class="empty-icon" aria-hidden="true">Aa</div>
+        <h3 id="emptyTitle">Start your vocabulary</h3>
+        <p id="emptyMessage">Select a word on any webpage and choose “Add to my vocab.”</p>
+      </div>
+    </section>
+
+    <footer>
+      <button id="viewAll" class="view-all" type="button">
+        Open full vocabulary
+        <span aria-hidden="true">→</span>
+      </button>
+    </footer>
+  </main>
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+  <script src="api.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
