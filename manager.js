@@ -11,6 +11,10 @@
     favoritesCount: document.getElementById('favoritesCount'),
     revisitedCount: document.getElementById('revisitedCount'),
     librarySummary: document.getElementById('librarySummary'),
+    libraryTitle: document.getElementById('libraryTitle'),
+    wordsCount: document.getElementById('wordsCount'),
+    linesCount: document.getElementById('linesCount'),
+    pagination: document.getElementById('pagination'),
     manualTerm: document.getElementById('manualTerm'),
     manualAdd: document.getElementById('manualAdd'),
     searchInput: document.getElementById('searchInput'),
@@ -21,11 +25,13 @@
     emptyMessage: document.getElementById('emptyMessage'),
     importButton: document.getElementById('importButton'),
     exportButton: document.getElementById('exportButton'),
+    printButton: document.getElementById('printButton'),
     importFile: document.getElementById('importFile'),
     clearButton: document.getElementById('clearButton'),
     floatingButtonSetting: document.getElementById('floatingButtonSetting'),
     contextMenuSetting: document.getElementById('contextMenuSetting'),
     notificationSetting: document.getElementById('notificationSetting'),
+    voiceGenderSetting: document.getElementById('voiceGenderSetting'),
     editDialog: document.getElementById('editDialog'),
     editForm: document.getElementById('editForm'),
     editId: document.getElementById('editId'),
@@ -42,6 +48,9 @@
 
   let entries = [];
   let activeFilter = 'all';
+  let activeKind = 'word';
+  let currentPage = 1;
+  const pageSize = 15;
   let statusTimer = null;
 
   function showStatus(message, error = false) {
@@ -134,10 +143,11 @@
 
     const actions = document.createElement('div');
     actions.className = 'row-actions';
+    const listen = makeButton(`Listen to ${entry.term}`, 'icon-button listen', 'Listen');
     const favorite = makeButton(entry.favorite ? 'Remove from favorites' : 'Add to favorites', `icon-button favorite-button${entry.favorite ? ' favorite' : ''}`, entry.favorite ? '★' : '☆');
     const edit = makeButton(`Edit ${entry.term}`, 'icon-button edit', '✎');
     const remove = makeButton(`Delete ${entry.term}`, 'icon-button delete', '×');
-    actions.append(favorite, edit, remove);
+    actions.append(listen, favorite, edit, remove);
     row.append(termCell, detailCell, sourceCell, actions);
     return row;
   }
@@ -167,7 +177,10 @@
     const revisited = entries.filter((entry) => (entry.saveCount || 1) > 1).length;
     const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
     const thisWeek = entries.filter((entry) => Date.parse(entry.createdAt) >= oneWeekAgo).length;
-    const visible = getVisibleEntries();
+    const visible = getVisibleEntries().filter((entry) => (entry.entryType || 'word') === activeKind);
+    const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
+    currentPage = Math.min(currentPage, pageCount);
+    const pageEntries = visible.slice((currentPage - 1) * pageSize, currentPage * pageSize);
     const hasQuery = Boolean(elements.searchInput.value.trim());
 
     elements.totalStat.textContent = String(entries.length);
@@ -177,14 +190,41 @@
     elements.allCount.textContent = String(entries.length);
     elements.favoritesCount.textContent = String(favorites);
     elements.revisitedCount.textContent = String(revisited);
+    elements.wordsCount.textContent = String(entries.filter((entry) => (entry.entryType || 'word') === 'word').length);
+    elements.linesCount.textContent = String(entries.filter((entry) => entry.entryType === 'line').length);
     elements.librarySummary.textContent = `${visible.length} ${visible.length === 1 ? 'item' : 'items'} shown`;
-    elements.entriesList.replaceChildren(...visible.map(createEntryRow));
+    elements.entriesList.replaceChildren(...pageEntries.map(createEntryRow));
     elements.entriesList.hidden = visible.length === 0;
     elements.emptyState.hidden = visible.length > 0;
     elements.emptyTitle.textContent = entries.length ? 'No matching words' : 'No words yet';
     elements.emptyMessage.textContent = entries.length
       ? (hasQuery ? 'Try another search term or clear your filters.' : 'There are no words in this filter yet.')
       : 'Select a word on a webpage and click “Add to my vocab.”';
+    elements.pagination.replaceChildren();
+    if (pageCount > 1) {
+      for (let page = 1; page <= pageCount; page += 1) {
+        const button = makeButton(`Go to page ${page}`, `page-button${page === currentPage ? ' active' : ''}`, String(page));
+        button.dataset.page = String(page);
+        elements.pagination.appendChild(button);
+      }
+    }
+  }
+
+  function speakTerm(term) {
+    if (!('speechSynthesis' in window)) {
+      showStatus('Speech is not supported in this browser.', true);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(term);
+    const voices = window.speechSynthesis.getVoices();
+    const pattern = elements.voiceGenderSetting.value === 'male'
+      ? /male|david|mark|alex|daniel/i
+      : /female|zira|samantha|victoria|karen/i;
+    utterance.voice = voices.find((voice) => pattern.test(voice.name))
+      || voices.find((voice) => voice.lang.toLowerCase().startsWith('en')) || null;
+    utterance.lang = utterance.voice?.lang || 'en-US';
+    window.speechSynthesis.speak(utterance);
   }
 
   async function loadEntries() {
@@ -301,6 +341,7 @@
       elements.floatingButtonSetting.checked = response.settings.floatingButton;
       elements.contextMenuSetting.checked = response.settings.contextMenu;
       elements.notificationSetting.checked = response.settings.notifications;
+      elements.voiceGenderSetting.value = response.settings.voiceGender || 'female';
     } catch (error) {
       showStatus(error.message, true);
     }
@@ -320,12 +361,32 @@
   elements.manualTerm.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') void manualAdd();
   });
-  elements.searchInput.addEventListener('input', render);
-  elements.sortSelect.addEventListener('change', render);
+  elements.searchInput.addEventListener('input', () => { currentPage = 1; render(); });
+  elements.sortSelect.addEventListener('change', () => { currentPage = 1; render(); });
+  document.querySelector('.entry-kind-tabs').addEventListener('click', (event) => {
+    const button = event.target.closest('.entry-kind-tab');
+    if (!button) return;
+    activeKind = button.dataset.kind;
+    currentPage = 1;
+    document.querySelectorAll('.entry-kind-tab').forEach((item) => {
+      const selected = item === button;
+      item.classList.toggle('active', selected);
+      item.setAttribute('aria-selected', String(selected));
+    });
+    elements.libraryTitle.textContent = activeKind === 'line' ? 'Saved lines' : 'Saved words';
+    render();
+  });
+  elements.pagination.addEventListener('click', (event) => {
+    const button = event.target.closest('.page-button');
+    if (!button) return;
+    currentPage = Number(button.dataset.page);
+    render();
+  });
   document.querySelector('.filter-tabs').addEventListener('click', (event) => {
     const button = event.target.closest('.filter-tab');
     if (!button) return;
     activeFilter = button.dataset.filter;
+    currentPage = 1;
     document.querySelectorAll('.filter-tab').forEach((item) => item.classList.toggle('active', item === button));
     render();
   });
@@ -336,7 +397,9 @@
     const entry = entries.find((item) => item.id === row.dataset.id);
     if (!entry) return;
     try {
-      if (event.target.closest('.favorite-button')) {
+      if (event.target.closest('.listen')) {
+        speakTerm(entry.term);
+      } else if (event.target.closest('.favorite-button')) {
         await api.update(entry.id, { favorite: !entry.favorite });
         await loadEntries();
       } else if (event.target.closest('.edit')) {
@@ -364,6 +427,7 @@
   });
 
   elements.exportButton.addEventListener('click', exportEntries);
+  elements.printButton.addEventListener('click', () => window.print());
   elements.importButton.addEventListener('click', () => elements.importFile.click());
   elements.importFile.addEventListener('change', () => {
     const [file] = elements.importFile.files;
@@ -388,6 +452,7 @@
   elements.floatingButtonSetting.addEventListener('change', () => void updateSetting('floatingButton', elements.floatingButtonSetting.checked));
   elements.contextMenuSetting.addEventListener('change', () => void updateSetting('contextMenu', elements.contextMenuSetting.checked));
   elements.notificationSetting.addEventListener('change', () => void updateSetting('notifications', elements.notificationSetting.checked));
+  elements.voiceGenderSetting.addEventListener('change', () => void updateSetting('voiceGender', elements.voiceGenderSetting.value));
 
   void Promise.all([loadEntries(), loadSettings()]);
 })();

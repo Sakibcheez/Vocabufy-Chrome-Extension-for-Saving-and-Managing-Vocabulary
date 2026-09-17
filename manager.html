@@ -34,6 +34,7 @@
         <div class="header-actions">
           <button id="importButton" class="secondary-button" type="button">Import</button>
           <button id="exportButton" class="secondary-button" type="button">Export</button>
+          <button id="printButton" class="secondary-button" type="button">Print / save PDF</button>
           <input id="importFile" type="file" accept="application/json,.json" hidden>
         </div>
       </header>
@@ -64,6 +65,10 @@
             <input id="searchInput" type="search" autocomplete="off" placeholder="Search words, notes, or context">
           </label>
         </div>
+        <div class="entry-kind-tabs" role="tablist" aria-label="Saved content type">
+          <button class="entry-kind-tab active" data-kind="word" type="button" role="tab" aria-selected="true">Saved words <span id="wordsCount">0</span></button>
+          <button class="entry-kind-tab" data-kind="line" type="button" role="tab" aria-selected="false">Saved lines <span id="linesCount">0</span></button>
+        </div>
         <div class="toolbar">
           <div class="filter-tabs" role="group" aria-label="Filter vocabulary">
             <button class="filter-tab active" data-filter="all" type="button">All <span id="allCount">0</span></button>
@@ -81,6 +86,7 @@
           </label>
         </div>
         <div id="entriesList" class="entries-list" aria-live="polite"></div>
+        <nav id="pagination" class="pagination" aria-label="Vocabulary pages"></nav>
         <div id="emptyState" class="empty-state" hidden>
           <div class="empty-mark" aria-hidden="true">Aa</div>
           <h3 id="emptyTitle">No words yet</h3>
@@ -101,6 +107,10 @@
         <div class="setting-row">
           <div><strong>Save notifications</strong><p>Confirm when a selected word is added or revisited.</p></div>
           <label class="switch"><input id="notificationSetting" type="checkbox"><span aria-hidden="true"></span></label>
+        </div>
+        <div class="setting-row">
+          <div><strong>Pronunciation voice</strong><p>Choose the preferred voice gender for pronunciation.</p></div>
+          <label class="select-control" for="voiceGenderSetting"><select id="voiceGenderSetting"><option value="female">Female</option><option value="male">Male</option></select></label>
         </div>
         <div class="danger-row">
           <div><strong>Clear vocabulary</strong><p>Permanently delete every saved word from this browser.</p></div>

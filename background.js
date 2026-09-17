@@ -4,11 +4,13 @@ const ENTRIES_KEY = 'vocabufyEntries';
 const SETTINGS_KEY = 'vocabufySettings';
 const MENU_ID = 'vocabufy-add-selection';
 const MAX_TERM_LENGTH = 120;
+const MAX_LINE_LENGTH = 1000;
 
 const DEFAULT_SETTINGS = Object.freeze({
   floatingButton: true,
   contextMenu: true,
-  notifications: true
+  notifications: true,
+  voiceGender: 'female'
 });
 
 let mutationQueue = Promise.resolve();
@@ -28,6 +30,12 @@ function cleanTerm(value) {
   let term = compactText(value, MAX_TERM_LENGTH + 40);
   term = term.replace(/^[\s"“”'‘’()[\]{}<>.,!?;:…—–\-]+|[\s"“”'‘’()[\]{}<>.,!?;:…—–\-]+$/gu, '');
   return Array.from(term).slice(0, MAX_TERM_LENGTH).join('').trim();
+}
+
+function cleanSavedText(value) {
+  if (typeof value !== 'string') return '';
+  return value.replace(/[\u200B-\u200D\uFEFF]/g, '').split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n').slice(0, MAX_LINE_LENGTH).trim();
 }
 
 function normalizeTerm(value) {
@@ -75,12 +83,14 @@ function buildSource(data, now) {
 }
 
 function createEntry(data, now = new Date().toISOString()) {
-  const term = cleanTerm(data.term);
+  const entryType = data.entryType === 'line' || /\r?\n/.test(data.term || '') ? 'line' : 'word';
+  const term = entryType === 'line' ? cleanSavedText(data.term) : cleanTerm(data.term);
   if (!term) throw new Error('Please select or enter a valid word.');
   const source = buildSource(data, now);
   return {
     id: makeId(),
     term,
+    entryType,
     normalizedTerm: normalizeTerm(term),
     definition: compactText(data.definition, 1000),
     note: compactText(data.note, 1000),
@@ -96,12 +106,13 @@ function createEntry(data, now = new Date().toISOString()) {
 }
 
 async function addEntry(data) {
-  const term = cleanTerm(data?.term);
+  const entryType = data?.entryType === 'line' || /\r?\n/.test(data?.term || '') ? 'line' : 'word';
+  const term = entryType === 'line' ? cleanSavedText(data?.term) : cleanTerm(data?.term);
   if (!term) throw new Error('Please select or enter a valid word.');
   const normalized = normalizeTerm(term);
   const now = new Date().toISOString();
   const entries = await getEntries();
-  const existingIndex = entries.findIndex((entry) => normalizeTerm(entry.term) === normalized);
+  const existingIndex = entries.findIndex((entry) => (entry.entryType || 'word') === entryType && normalizeTerm(entry.term) === normalized);
 
   if (existingIndex >= 0) {
     const existing = entries[existingIndex];
@@ -114,6 +125,7 @@ async function addEntry(data) {
     }
     const updated = {
       ...existing,
+      entryType,
       normalizedTerm: normalized,
       context: compactText(data.context, 600) || existing.context || '',
       sourceTitle: source?.title || existing.sourceTitle || '',
@@ -127,7 +139,7 @@ async function addEntry(data) {
     return { status: 'updated', entry: updated };
   }
 
-  const entry = createEntry({ ...data, term }, now);
+  const entry = createEntry({ ...data, term, entryType }, now);
   entries.unshift(entry);
   await setEntries(entries);
   return { status: 'added', entry };
@@ -139,7 +151,9 @@ async function updateEntry(id, changes) {
   if (index < 0) throw new Error('That vocabulary item no longer exists.');
 
   const current = entries[index];
-  const nextTerm = Object.prototype.hasOwnProperty.call(changes, 'term') ? cleanTerm(changes.term) : current.term;
+  const nextTerm = Object.prototype.hasOwnProperty.call(changes, 'term')
+    ? ((current.entryType || 'word') === 'line' ? cleanSavedText(changes.term) : cleanTerm(changes.term))
+    : current.term;
   if (!nextTerm) throw new Error('A vocabulary item must have a word or phrase.');
   const nextNormalized = normalizeTerm(nextTerm);
   const conflict = entries.some((entry, entryIndex) => entryIndex !== index && normalizeTerm(entry.term) === nextNormalized);
@@ -291,7 +305,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const current = await getSettings();
         const settings = { ...current };
         for (const key of Object.keys(DEFAULT_SETTINGS)) {
-          if (Object.prototype.hasOwnProperty.call(message.settings || {}, key)) settings[key] = Boolean(message.settings[key]);
+          if (!Object.prototype.hasOwnProperty.call(message.settings || {}, key)) continue;
+          settings[key] = key === 'voiceGender'
+            ? (message.settings[key] === 'male' ? 'male' : 'female')
+            : Boolean(message.settings[key]);
         }
         await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
         await refreshContextMenu();

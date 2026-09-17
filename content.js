@@ -74,6 +74,22 @@
     return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
   }
 
+  function compactSelection(value, max = 1000) {
+    return String(value || '').replace(/[\u200B-\u200D\uFEFF]/g, '').split(/\r?\n/)
+      .map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n').slice(0, max).trim();
+  }
+
+  function extractSelectionText(range) {
+    const blockTags = /^(ADDRESS|ARTICLE|ASIDE|BLOCKQUOTE|DIV|H[1-6]|LI|P|PRE|SECTION|TR)$/;
+    function readNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+      if (node.nodeName === 'BR') return '\n';
+      const text = Array.from(node.childNodes || []).map(readNode).join('');
+      return blockTags.test(node.nodeName) ? `\n${text}\n` : text;
+    }
+    return compactSelection(readNode(range.cloneContents()));
+  }
+
   function getContext(selection, range) {
     const selected = compact(selection.toString(), 120);
     let container = range.commonAncestorContainer;
@@ -129,12 +145,12 @@
       hideButton();
       return;
     }
-    const term = compact(selection.toString(), 160);
-    if (!term || Array.from(term).length > 120) {
+    const range = selection.getRangeAt(0);
+    const term = extractSelectionText(range) || compactSelection(selection.toString(), 1000);
+    if (!term || Array.from(term).length > 1000) {
       hideButton();
       return;
     }
-    const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     if (!rect || (!rect.width && !rect.height)) {
       hideButton();
